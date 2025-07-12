@@ -4,13 +4,66 @@ declare_id!("DVyeivuEkP3tynMx8kH6vJyEAtXGV2H1BRh6MA1S8jwi");
 
 #[program]
 pub mod blueshift_anchor_vault {
+    use anchor_lang::system_program::{transfer, Transfer};
+
     use super::*;
 
-    pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
-        msg!("Greetings from: {:?}", ctx.program_id);
+    pub fn deposit(ctx: Context<VaultAction>, amount: u64) -> Result<()> {
+        require_eq!(ctx.accounts.vault.lamports(), 0,VaultError::VaultAlreadyExists);
+        require_gt!(amount, Rent::get()?.minimum_balance(0));
+
+        let cpi_context = CpiContext::new(
+            ctx.accounts.system_program.to_account_info(),
+            Transfer {
+                from: ctx.accounts.signer.to_account_info(),
+                to:ctx.accounts.vault.to_account_info()
+            }
+        );
+        transfer(cpi_context, amount)?;
+        Ok(())
+    }
+
+    pub fn withdraw(ctx: Context<VaultAction>,amount: u64) -> Result<()> {
+        require_neq!(ctx.accounts.vault.lamports(), 0,VaultError::VaultAlreadyExists);
+
+
+        let signer_key = ctx.accounts.signer.key();
+        let signer_seeds: &[&[u8]] = &[b"vault", signer_key.as_ref(), &[ctx.bumps.vault]];
+        let seeds = &[signer_seeds];
+
+        let cpi_context = CpiContext::new_with_signer(
+            ctx.accounts.system_program.to_account_info(),
+            Transfer {
+                from: ctx.accounts.vault.to_account_info(),
+                to: ctx.accounts.signer.to_account_info()
+            },
+            seeds
+        );
+
+        transfer(cpi_context, amount)?;
         Ok(())
     }
 }
 
 #[derive(Accounts)]
-pub struct Initialize {}
+pub struct VaultAction<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"vault",signer.key().as_ref()],
+        bump
+    )]
+    pub vault: SystemAccount<'info>,
+
+    pub system_program: Program<'info,System>
+}
+
+#[error_code]
+pub enum VaultError {
+  #[msg("Vault already exists")]
+  VaultAlreadyExists,
+  #[msg("Invalid amount")]
+  InvalidAmount,
+}
