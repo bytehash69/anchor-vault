@@ -46,7 +46,7 @@ pub mod blueshift_anchor_vault {
         
         // Creating the seeds for vault pda
         let signer_key = signer.key();
-        let signer_seeds: &[&[u8]] = &[b"byte",signer_key.as_ref(),&[ctx.bumps.vault]];
+        let signer_seeds: &[&[u8]] = &[b"vault",signer_key.as_ref(),&[ctx.bumps.vault]];
         let seeds = &[signer_seeds];
 
         // Creating the cpi context required for the transfer function 
